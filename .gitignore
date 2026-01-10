@@ -44,3 +44,5 @@ bin/
 .DS_Store
 
 .env
+
+**.db
