@@ -15,6 +15,7 @@ import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.modals.Modal;
 import net.loretale.discordbot.Constants;
 import net.loretale.discordbot.Database;
+import net.loretale.discordbot.commands.ApplicationSyncCommand;
 
 import java.awt.*;
 import java.sql.PreparedStatement;
@@ -38,6 +39,15 @@ public class ApplicationButton extends ListenerAdapter {
 
         if (!id.equals(buttonId)) return;
 
+
+        try {
+            ApplicationSyncCommand.syncIfAccepted(event.getGuild(), event.getUser().getId());
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+
+
         Modal modal = Modal.create(modalId, "Create application")
                 .addComponents(
                         Label.of("Hytale Username", TextInput.create(usernameKey, TextInputStyle.SHORT)
@@ -50,7 +60,7 @@ public class ApplicationButton extends ListenerAdapter {
                                 .addOption("no", "No")
                                 .build()),
                         Label.of("Define metagaming & powergaming", "1-2 sentences", TextInput.create(metagamingKey, TextInputStyle.PARAGRAPH)
-                                .setPlaceholder("Metagaming is...")
+                                .setPlaceholder("Metagaming is... Powergaming is...")
                                 .setMinLength(10)
                                 .setMaxLength(200)
                                 .build()),
@@ -89,9 +99,45 @@ public class ApplicationButton extends ListenerAdapter {
             return;
         }
 
-        event.deferReply(true).queue();
+        // read username early so it's available for the DB check
+        if (event.getValue(usernameKey) == null) {
+            event.reply("Username input missing.").setEphemeral(true).queue();
+            return;
+        }
 
         String username = Objects.requireNonNull(event.getValue(usernameKey)).getAsString();
+
+        boolean hasAcceptedRole = member.getRoles().stream()
+                .anyMatch(r -> r.getId().equals(Constants.ACCEPTED_ROLE_ID));
+        if (hasAcceptedRole) {
+            event.reply("You already have the accepted role and cannot make an application.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        try (PreparedStatement ps = Database.getConnection().prepareStatement(
+                "SELECT 1 FROM applications WHERE (user_id = ? OR username = ?) AND status = 'ACCEPTED' LIMIT 1"
+        )) {
+            ps.setString(1, member.getId());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    event.reply("An accepted application already exists for your account or that username. You cannot create another.")
+                            .setEphemeral(true)
+                            .queue();
+                    return;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            event.reply("Database error while checking existing applications. Try again later.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+
+        event.deferReply(true).queue();
 
         String threadName = username + "-" + getNextApplicationNumber();
 
@@ -127,7 +173,7 @@ public class ApplicationButton extends ListenerAdapter {
 
         thread.sendMessage(Objects.requireNonNull(guild.getRoleById(Constants.STAFF_ROLE_ID)).getAsMention()).queue();
 
-        thread.addThreadMember(member);
+        thread.addThreadMember(member).queue();
 
         try (PreparedStatement ps = Database.getConnection().prepareStatement("""
                 INSERT INTO applications (
