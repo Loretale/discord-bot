@@ -39,6 +39,7 @@ public class Main {
                 .addEventListeners(new TicketButton())
                 .addEventListeners(new ApplicationButton())
                 .addEventListeners(new ApplicationStatusCommand())
+                .addEventListeners(new ApplicationSyncCommand())
                 .build();
 
         jda.awaitReady();
@@ -52,6 +53,8 @@ public class Main {
 
         guild.updateCommands()
                 .addCommands(
+                        Commands.slash(ApplicationSyncCommand.name, ApplicationSyncCommand.description)
+                                .addOption(OptionType.USER, "user", "User to sync (staff only)", false),
                         Commands.slash(PingCommand.name, PingCommand.description),
                         Commands.slash("message", "Manage persistent messages")
                                 .setDefaultPermissions(DefaultMemberPermissions.DISABLED)
