@@ -1,0 +1,6 @@
+[user]
+    name = NotAPan
+    email = kazplayingmc@gmail.com
+
+[core]
+    sshCommand = ssh -i ~/.ssh/id_ed25519_work.pub
