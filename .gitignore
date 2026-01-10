@@ -44,3 +44,4 @@ bin/
 
 .env
 .gitconfig-work
+discordbot.db
