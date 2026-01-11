@@ -1,6 +1,5 @@
 plugins {
     id("java")
-    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "net.loretale"
@@ -26,8 +25,24 @@ tasks.test {
     useJUnitPlatform()
 }
 
-tasks.shadowJar {
+tasks.register("fatJar", Jar::class) {
+    group = "build"
+    description = "Assembles a fat JAR with all dependencies"
+
+    archiveBaseName.set("${project.name}-all")
+    archiveVersion.set("${project.version}")
     manifest {
         attributes["Main-Class"] = "net.loretale.discordbot.Main"
     }
+
+    from(sourceSets.main.get().output)
+
+    dependsOn(configurations.runtimeClasspath)
+    from({
+        configurations.runtimeClasspath.get()
+            .filter { it.name.endsWith("jar") }
+            .map { zipTree(it) }
+    })
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
