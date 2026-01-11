@@ -1,5 +1,6 @@
 plugins {
     id("java")
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "net.loretale"
@@ -25,7 +26,7 @@ tasks.test {
     useJUnitPlatform()
 }
 
-tasks.jar {
+tasks.shadowJar {
     manifest {
         attributes["Main-Class"] = "net.loretale.discordbot.Main"
     }
