@@ -37,5 +37,5 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            mv /opt/discord-bot/*.jar /opt/discord-bot/bot.jar
+            mv /opt/discord-bot/build/libs/*.jar /opt/discord-bot/bot.jar
             sudo systemctl restart discord-bot
