@@ -13,10 +13,9 @@ public class V1_PersistentMessages implements Migration {
         try (Statement s = connection.createStatement()) {
             s.execute("""
                     CREATE TABLE IF NOT EXISTS persistent_messages (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        id SERIAL PRIMARY KEY,
                         channel_id TEXT NOT NULL,
-                        message_id TEXT NOT NULL,
-                        content TEXT NOT NULL
+                        message_id TEXT NOT NULL
                     )
                     """);
         }

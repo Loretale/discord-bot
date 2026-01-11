@@ -11,16 +11,15 @@ import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
-import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 import net.loretale.discordbot.buttons.ApplicationButton;
 import net.loretale.discordbot.buttons.TicketButton;
 import net.loretale.discordbot.commands.*;
+import net.loretale.discordbot.listeners.LogListener;
+import net.loretale.discordbot.listeners.ReactionListener;
+import net.loretale.discordbot.util.Logger;
 
 import java.awt.*;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.Objects;
 
 public class Main {
@@ -40,6 +39,8 @@ public class Main {
                 .addEventListeners(new ApplicationButton())
                 .addEventListeners(new ApplicationStatusCommand())
                 .addEventListeners(new ApplicationSyncCommand())
+                .addEventListeners(new LogListener())
+                .addEventListeners(new ReactionListener())
                 .build();
 
         jda.awaitReady();
@@ -47,6 +48,8 @@ public class Main {
         System.out.println("Bot is online!");
 
         Guild guild = Objects.requireNonNull(jda.getGuildById(Constants.GUILD_ID));
+
+        Logger.init(guild);
 
         createTicketEmbed(guild);
         createApplicationEmbed(guild);

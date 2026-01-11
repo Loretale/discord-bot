@@ -1,17 +1,13 @@
 package net.loretale.discordbot.commands;
 
 import net.dv8tion.jda.api.EmbedBuilder;
-import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
-import net.loretale.discordbot.Database;
+import net.loretale.discordbot.model.Ticket;
 
 import java.awt.*;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 
 public class TicketCloseCommand extends ListenerAdapter {
     public static final String name = "ticket-close";
@@ -39,8 +35,7 @@ public class TicketCloseCommand extends ListenerAdapter {
             return;
         }
 
-
-        if (!isTicketOpen(thread.getId())) {
+        if (!Ticket.isOpen(thread)) {
             event.reply("Thread is not a ticket or ticket is already closed.")
                     .setEphemeral(true)
                     .queue();
@@ -56,32 +51,8 @@ public class TicketCloseCommand extends ListenerAdapter {
         closeTicket(thread, reason);
     }
 
-    private boolean isTicketOpen(String threadId) {
-        try (PreparedStatement ps = Database.getConnection().prepareStatement("""
-            SELECT status FROM tickets WHERE thread_id = ?
-        """)) {
-            ps.setString(1, threadId);
-            ResultSet rs = ps.executeQuery();
-            return rs.next() && "OPEN".equals(rs.getString("status"));
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
     private void closeTicket(ThreadChannel thread, String reason) {
-        try (PreparedStatement ps = Database.getConnection().prepareStatement("""
-        UPDATE tickets
-        SET status = 'CLOSED',
-            close_reason = ?
-        WHERE thread_id = ?
-    """)) {
-            ps.setString(1, reason);
-            ps.setString(2, thread.getId());
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        Ticket.close(thread, reason);
 
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Ticket Closed")

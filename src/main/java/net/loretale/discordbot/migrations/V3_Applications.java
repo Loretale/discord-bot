@@ -7,7 +7,7 @@ import java.sql.Statement;
 public class V3_Applications implements Migration {
     @Override
     public int version() {
-        return 7;
+        return 3;
     }
 
     @Override
@@ -15,12 +15,12 @@ public class V3_Applications implements Migration {
         try (Statement s = connection.createStatement()) {
             s.execute("""
                 CREATE TABLE IF NOT EXISTS applications (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     thread_id TEXT NOT NULL,
                     user_id TEXT NOT NULL,
                     username TEXT NOT NULL,
                     age TEXT NOT NULL,
-                    metagaming TEXT NOT NULL,
+                    metagaming_powergaming TEXT NOT NULL,
                     persona TEXT NOT NULL,
                     prompt TEXT NOT NULL,
                     status TEXT NOT NULL

@@ -5,11 +5,7 @@ import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
-import net.loretale.discordbot.Database;
-
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import net.loretale.discordbot.model.Ticket;
 
 public class TicketAddCommand extends ListenerAdapter {
     public static final String name = "ticket-add";
@@ -22,7 +18,7 @@ public class TicketAddCommand extends ListenerAdapter {
     public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
         if (!event.isFromGuild() || !event.getName().equals(name)) return;
 
-        if (!(event.getChannel() instanceof ThreadChannel thread)) {
+        if (!(event.getChannel() instanceof ThreadChannel thread) || Ticket.exists(thread)) {
             event.reply("This command can only be used inside a ticket channel")
                     .setEphemeral(true)
                     .queue();
@@ -47,7 +43,7 @@ public class TicketAddCommand extends ListenerAdapter {
             return;
         }
 
-        if (!isTicketOpen(thread.getId())) {
+        if (!Ticket.isOpen(thread)) {
             event.reply("Ticket is close or this is not a ticket thread.")
                     .setEphemeral(true)
                     .queue();
@@ -56,22 +52,13 @@ public class TicketAddCommand extends ListenerAdapter {
 
         thread.addThreadMember(target).queue(
                 _ -> thread.sendMessage("Added " + target.getAsMention() + " to the ticket.").queue(),
-                _ -> thread.sendMessage("Failed to add user " + target + " to the ticket.").queue()
+                _ -> thread
+                        .sendMessage("Failed to add user " + target.getAsMention() + " to the ticket.")
+                        .queue()
         );
 
-        event.reply("Done.").setEphemeral(true).queue();
-    }
-
-    private boolean isTicketOpen(String threadId) {
-        try (PreparedStatement ps = Database.getConnection().prepareStatement("""
-            SELECT status FROM tickets WHERE thread_id = ?
-        """)) {
-            ps.setString(1, threadId);
-            ResultSet rs = ps.executeQuery();
-            return rs.next() && "OPEN".equals(rs.getString("status"));
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
-        }
+        event.reply("Done.")
+                .setEphemeral(true)
+                .queue();
     }
 }

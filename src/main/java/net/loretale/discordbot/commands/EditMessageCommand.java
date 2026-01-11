@@ -1,14 +1,12 @@
 package net.loretale.discordbot.commands;
 
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
-import net.loretale.discordbot.Database;
-
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import net.loretale.discordbot.model.PersistentMessage;
+import net.loretale.discordbot.util.Permissions;
 
 public class EditMessageCommand extends ListenerAdapter {
     public static final String name = "edit";
@@ -26,6 +24,14 @@ public class EditMessageCommand extends ListenerAdapter {
                 event.getSubcommandName() == null ||
                 !event.getSubcommandName().equals(name)) return;
 
+        Member member = event.getMember();
+        if (!Permissions.isAdmin(member)) {
+            event.reply("You do not have permission to do this.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         OptionMapping idOption = event.getOption(optionIdName);
         OptionMapping contentOption = event.getOption(optionContentName);
 
@@ -36,64 +42,45 @@ public class EditMessageCommand extends ListenerAdapter {
             return;
         }
 
-        String id = idOption.getAsString();
+        String messageId = idOption.getAsString();
         String content = contentOption.getAsString().replace("\\n", "\n");
 
-        try (PreparedStatement s = Database.getConnection().prepareStatement("""
-                SELECT id, channel_id, message_id
-                FROM persistent_messages
-                WHERE message_id = ?
-            """)) {
-            s.setString(1, id);
-            ResultSet rs = s.executeQuery();
+        String channelId = PersistentMessage.getChannelId(messageId);
 
-            if (!rs.next()) {
-                event.reply("No message found with that ID.")
-                        .setEphemeral(true)
-                        .queue();
-                return;
-            }
+        if (channelId == null) {
+            event.reply("No message found with that ID.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
 
-            String channelId = rs.getString("channel_id");
-            String messageId = rs.getString("message_id");
-            int dbId = rs.getInt("id");
+        TextChannel channel = event.getJDA().getTextChannelById(channelId);
 
-            TextChannel channel = event.getJDA().getTextChannelById(channelId);
+        if (channel == null) {
+            event.reply("Channel no longer exists.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
 
-            if (channel == null) {
-                event.reply("Channel no longer exists.")
-                        .setEphemeral(true)
-                        .queue();
-                return;
-            }
+        channel.retrieveMessageById(messageId).queue(message -> {
+            message.editMessage(content).queue(
+                    __ -> {
+                        event.reply("Message updated.")
+                                .setEphemeral(true)
+                                .queue();
+                    },
+                    __ -> {
+                        event.reply("Something went wrong while trying to edit the message.")
+                                .setEphemeral(true)
+                                .queue();
+                    }
+            );
 
-            channel.retrieveMessageById(messageId).queue(message -> {
-                message.editMessage(content).queue();
-
-                try (PreparedStatement update = Database.getConnection().prepareStatement("""
-                        UPDATE persistent_messages
-                        SET content = ?
-                        WHERE id = ?
-                    """)) {
-                    update.setString(1, content);
-                    update.setInt(2, dbId);
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-
-                event.reply("Message updated.")
-                        .setEphemeral(true)
-                        .queue();
-            }, failure -> {
+            }, __ -> {
                 event.reply("Failed to retrieve message (it may have been deleted).")
                         .setEphemeral(true)
                         .queue();
             });
-        } catch (SQLException e) {
-            e.printStackTrace();
-            event.reply("Database error occurred.")
-                    .setEphemeral(true)
-                    .queue();
-        }
     }
 }

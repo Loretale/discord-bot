@@ -42,6 +42,7 @@ public class MigrationManager {
     private static int getCurrentVersion(Connection connection) throws SQLException {
         try (Statement s = connection.createStatement()) {
             ResultSet rs = s.executeQuery("SELECT MAX(version) FROM schema_version");
+            rs.next();
             return rs.getInt(1);
         }
     }

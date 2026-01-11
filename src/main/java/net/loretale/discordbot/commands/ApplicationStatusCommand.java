@@ -1,5 +1,6 @@
 package net.loretale.discordbot.commands;
 
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
@@ -10,13 +11,11 @@ import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.loretale.discordbot.Constants;
-import net.loretale.discordbot.Database;
+import net.loretale.discordbot.model.Application;
+import net.loretale.discordbot.util.Permissions;
 
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class ApplicationStatusCommand extends ListenerAdapter {
@@ -53,8 +52,8 @@ public class ApplicationStatusCommand extends ListenerAdapter {
             return;
         }
 
-        Member staff = event.getMember();
-        if (!isStaff(staff)) {
+        Member member = event.getMember();
+        if (!Permissions.isStaff(member)) {
             event.reply("You do not have permission to do this.")
                     .setEphemeral(true)
                     .queue();
@@ -70,25 +69,20 @@ public class ApplicationStatusCommand extends ListenerAdapter {
             return;
         }
 
-        String userId = "";
-
-        try (ResultSet rs = getApplicationByThread(thread.getId())) {
-            if (!rs.next()) {
-                event.reply("Application not found.")
-                        .setEphemeral(true)
-                        .queue();
-                return;
-            }
-
-            userId = rs.getString("user_id");
-        } catch (SQLException e) {
-            e.printStackTrace();
-            event.reply("Something went wrong trying to find the application.")
+        if (Arrays.stream(states).noneMatch(s -> s.equals(statusOption.getAsString()))) {
+            event.reply("Unknown status.")
                     .setEphemeral(true)
                     .queue();
         }
 
+        String userId = Application.getUserId(thread);
 
+        if (userId == null) {
+            event.reply("Application not found.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
 
         OptionMapping reasonOption = event.getOption(optionReasonName);
 
@@ -112,71 +106,74 @@ public class ApplicationStatusCommand extends ListenerAdapter {
             return;
         }
 
-        try {
-            updateStatus(thread.getId(), "DENIED");
-
-            notifyApplicant(event.getGuild(), userId, "Denied", reason.getAsString());
-
-            event.reply("Application denied.")
+        if(!Application.updateStatus(thread.getId(), "DENIED")) {
+            event.reply("Something went wrong trying to update status.")
                     .setEphemeral(true)
                     .queue();
-
-            thread.sendMessage("Application denied for reason:\n" + reason.getAsString())
-                    .queue(_ -> {
-                        thread.getManager().setName(thread.getName() + "\uD83D\uDFE5").queue(_ -> {
-                            thread.getManager().setLocked(true).setArchived(true).queue();
-                        });
-                    });
-        } catch (SQLException e) {
-            e.printStackTrace();
-
-            event.reply("Something went wrong.")
-                    .setEphemeral(true)
-                    .queue();
+            return;
         }
+
+        notifyApplicant(event.getGuild(), userId, "Your application " + thread.getAsMention() + " has been " +
+                "DENIED for reason: " + reason + ".\nNote that you can make a new application, unless otherwise mentioned.");
+
+        event.reply("Application denied.")
+                .setEphemeral(true)
+                .queue();
+
+        thread.sendMessage("Application denied for reason:\n" + reason.getAsString())
+                .queue(_ -> {
+                    thread.getManager().setName(thread.getName() + "\uD83D\uDFE5").queue(_ -> {
+                        thread.getManager().setLocked(true).setArchived(true).queue();
+                    });
+                });
     }
 
     private void handleAccepted(SlashCommandInteractionEvent event, ThreadChannel thread, String userId) {
         Guild guild = event.getGuild();
-        assert guild != null;
 
-        try (ResultSet rs = getApplicationByThread(thread.getId())) {
-            if (!rs.next()) {
-                event.reply("Application not found.")
-                        .setEphemeral(true)
-                        .queue();
-                return;
-            }
-
-            String username = rs.getString("username");
-
-            updateStatus(thread.getId(), "ACCEPTED");
-            notifyApplicant(guild, userId, "Accepted", "");
-
-            guild.retrieveMemberById(userId).queue(member -> {
-                        guild.modifyNickname(member, username).queue();
-                        Role role = guild.getRoleById(Constants.ACCEPTED_ROLE_ID);
-                        guild.addRoleToMember(member, role).queue();
-                    }
-            );
-
-            event.reply("Application **Accepted**.")
+        if (guild == null) {
+            event.reply("Interaction must happen in server.")
                     .setEphemeral(true)
                     .queue();
-
-            thread.sendMessage("Accepted.")
-                    .queue(_ -> {
-                        thread.getManager().setName(thread.getName() + "\uD83D\uDFE9").queue(_ -> {
-                            thread.getManager().setLocked(true).setArchived(true).queue();
-                        });
-                    });
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-            event.reply("Database error.")
-                    .setEphemeral(true)
-                    .queue();
+            return;
         }
+
+        String username = Application.getUserName(thread);
+
+        if (username == null) {
+            event.reply("Application not found.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if(!Application.updateStatus(thread.getId(), "ACCEPTED")) {
+            event.reply("Something went wrong trying to update status.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        notifyApplicant(guild, userId, "Your application " + thread.getAsMention() + " has been " +
+                "ACCEPTED, welcome to the server! When the server opens, you will be whitelisted and be able to join.");
+
+        guild.retrieveMemberById(userId).queue(member -> {
+                    guild.modifyNickname(member, username).queue();
+                    Role role = guild.getRoleById(Constants.ACCEPTED_ROLE_ID);
+                    guild.addRoleToMember(member, role).queue();
+                }
+        );
+
+        event.reply("Application **Accepted**.")
+                .setEphemeral(true)
+                .queue();
+
+        thread.sendMessage("Accepted.")
+                .queue(_ -> {
+                    thread.getManager().setName(thread.getName() + "\uD83D\uDFE9").queue(_ -> {
+                        thread.getManager().setLocked(true).setArchived(true).queue();
+                    });
+                });
     }
 
     private void handlePending(SlashCommandInteractionEvent event, ThreadChannel thread, OptionMapping reason, String userId) {
@@ -187,63 +184,32 @@ public class ApplicationStatusCommand extends ListenerAdapter {
             return;
         }
 
-        try {
-            updateStatus(thread.getId(), "PENDING");
-
-            notifyApplicant(event.getGuild(), userId, "Pending", reason.getAsString());
-
-            thread.sendMessage("Application put on pending for reason:\n" + reason.getAsString())
-                            .queue(_ -> {
-                                thread.getManager().setName(thread.getName() + "\uD83D\uDFE8").queue();
-                            });
-
-            event.reply("Application set to pending.")
+        if(!Application.updateStatus(thread.getId(), "PENDING")) {
+            event.reply("Something went wrong trying to update status.")
                     .setEphemeral(true)
                     .queue();
-        } catch (SQLException e) {
-            e.printStackTrace();
-
-            event.reply("Something went wrong.")
-                    .setEphemeral(true)
-                    .queue();
+            return;
         }
+
+        notifyApplicant(event.getGuild(), userId, "Your application " + thread.getAsMention() +
+                " has been put on PENDING, for reason: " + reason.getAsString() + "\n" +
+                "Please respond with to the requested edit / questions.");
+
+        thread.sendMessage("Application put on pending for reason:\n" + reason.getAsString())
+                        .queue(_ -> {
+                            thread.getManager().setName(thread.getName() + "\uD83D\uDFE8").queue();
+                        });
+
+        event.reply("Application set to pending.")
+                .setEphemeral(true)
+                .queue();
     }
 
-    private boolean isStaff(Member member) {
-        return member != null
-                && member.getRoles().stream()
-                .anyMatch(r -> r.getId().equals(Constants.STAFF_ROLE_ID));
-    }
-
-    private ResultSet getApplicationByThread(String threadId) throws SQLException {
-        PreparedStatement ps = Database.getConnection().prepareStatement("""
-            SELECT * FROM applications WHERE thread_id = ?
-        """);
-        ps.setString(1, threadId);
-        return ps.executeQuery();
-    }
-
-    private void updateStatus(String threadId, String status) throws SQLException {
-        try (PreparedStatement ps = Database.getConnection().prepareStatement("""
-            UPDATE applications SET status = ? WHERE thread_id = ?
-        """)) {
-            ps.setString(1, status);
-            ps.setString(2, threadId);
-            ps.executeUpdate();
-        }
-    }
-
-    private void notifyApplicant(Guild guild, String userId, String status, String reason) {
+    private void notifyApplicant(Guild guild, String userId, String message) {
         guild.retrieveMemberById(userId).queue(member ->
                 member.getUser().openPrivateChannel().queue(channel ->
-                        channel.sendMessage(
-                                reason.isEmpty() ?
-                                "Your application status has been updated to **" + status + "**." :
-                                "Your application status has been updated to **" + status + "**.\nReason: " + reason
-                        ).queue()
+                        channel.sendMessage(message).queue()
                 )
         );
     }
-
-
 }

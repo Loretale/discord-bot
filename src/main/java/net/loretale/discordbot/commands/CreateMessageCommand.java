@@ -1,13 +1,12 @@
 package net.loretale.discordbot.commands;
 
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
-import net.loretale.discordbot.Database;
-
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
+import net.loretale.discordbot.model.PersistentMessage;
+import net.loretale.discordbot.util.Permissions;
 
 public class CreateMessageCommand extends ListenerAdapter {
     public static final String name = "create";
@@ -29,6 +28,14 @@ public class CreateMessageCommand extends ListenerAdapter {
             return;
         }
 
+        Member member = event.getMember();
+        if (!Permissions.isAdmin(member)) {
+            event.reply("You do not have permission to do this.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         TextChannel channel = event.getChannel().asTextChannel();
 
         OptionMapping contentOption = event.getOption(optionContentName);
@@ -40,24 +47,8 @@ public class CreateMessageCommand extends ListenerAdapter {
             return;
         }
 
-        String content = contentOption.getAsString().replace("\\n", "\n");;
+        String content = contentOption.getAsString();
 
-        channel.sendMessage(content).queue(message -> {
-            try (PreparedStatement s = Database.getConnection().prepareStatement("""
-                INSERT INTO persistent_messages (channel_id, message_id, content)
-                VALUES (?, ?, ?)
-            """)) {
-                s.setString(1, channel.getId());
-                s.setString(2, message.getId());
-                s.setString(3, content);
-                s.executeUpdate();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-
-            event.reply("Persistent message created!")
-                    .setEphemeral(true)
-                    .queue();
-        });
+        PersistentMessage.createMessage(content, channel, event);
     }
 }

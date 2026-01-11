@@ -14,14 +14,13 @@ import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.modals.Modal;
 import net.loretale.discordbot.Constants;
-import net.loretale.discordbot.Database;
 import net.loretale.discordbot.commands.ApplicationSyncCommand;
+import net.loretale.discordbot.model.Application;
 
 import java.awt.*;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class ApplicationButton extends ListenerAdapter {
     public static final String buttonId = "application:create:button";
@@ -35,18 +34,24 @@ public class ApplicationButton extends ListenerAdapter {
 
     @Override
     public void onButtonInteraction(ButtonInteractionEvent event) {
+        if (event.getGuild() == null) {
+            event.reply("Command must be used in server.")
+                    .setEphemeral(true)
+                    .queue();
+
+            return;
+        }
+
         String id = event.getComponentId();
 
         if (!id.equals(buttonId)) return;
 
-
-        try {
-            ApplicationSyncCommand.syncIfAccepted(event.getGuild(), event.getUser().getId());
-        } catch (SQLException e) {
-            e.printStackTrace();
+        if(ApplicationSyncCommand.syncIfAccepted(event.getGuild(), event.getUser().getId())) {
+            event.reply("This account is already linked to an accepted account. Synced.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
         }
-
-
 
         Modal modal = Modal.create(modalId, "Create application")
                 .addComponents(
@@ -56,8 +61,8 @@ public class ApplicationButton extends ListenerAdapter {
                                 .setMaxLength(16)
                                 .build()),
                         Label.of("Are you 16 or older?", StringSelectMenu.create(ageKey)
-                                .addOption("yes", "Yes")
-                                .addOption("no", "No")
+                                .addOption("Yes", "Yes")
+                                .addOption("No", "No")
                                 .build()),
                         Label.of("Define metagaming & powergaming", "1-2 sentences", TextInput.create(metagamingKey, TextInputStyle.PARAGRAPH)
                                 .setPlaceholder("Metagaming is... Powergaming is...")
@@ -84,12 +89,21 @@ public class ApplicationButton extends ListenerAdapter {
 
     @Override
     public void onModalInteraction(ModalInteractionEvent event) {
+        Guild guild = event.getGuild();
+
+        if (guild == null) {
+            event.reply("Command must be used in server.")
+                    .setEphemeral(true)
+                    .queue();
+
+            return;
+        }
+
         String id = event.getModalId();
 
         if (!id.equals(modalId)) return;
 
-        TextChannel applicationChannel = Objects.requireNonNull(event.getGuild())
-                .getTextChannelById(Constants.APPLICATION_CHANNEL_ID);
+        TextChannel applicationChannel = guild.getTextChannelById(Constants.APPLICATION_CHANNEL_ID);
         Member member = event.getMember();
 
         if (applicationChannel == null || member == null) {
@@ -99,9 +113,10 @@ public class ApplicationButton extends ListenerAdapter {
             return;
         }
 
-        // read username early so it's available for the DB check
         if (event.getValue(usernameKey) == null) {
-            event.reply("Username input missing.").setEphemeral(true).queue();
+            event.reply("Username input missing.")
+                    .setEphemeral(true)
+                    .queue();
             return;
         }
 
@@ -116,30 +131,16 @@ public class ApplicationButton extends ListenerAdapter {
             return;
         }
 
-        try (PreparedStatement ps = Database.getConnection().prepareStatement(
-                "SELECT 1 FROM applications WHERE (user_id = ? OR username = ?) AND status = 'ACCEPTED' LIMIT 1"
-        )) {
-            ps.setString(1, member.getId());
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    event.reply("An accepted application already exists for your account or that username. You cannot create another.")
-                            .setEphemeral(true)
-                            .queue();
-                    return;
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            event.reply("Database error while checking existing applications. Try again later.")
+        if (Application.hasAcceptedApplication(member, username)) {
+            event.reply("An accepted application already exists for that account or username.")
                     .setEphemeral(true)
                     .queue();
             return;
         }
 
-
         event.deferReply(true).queue();
 
-        String threadName = username + "-" + getNextApplicationNumber();
+        String threadName = username + "-" + Application.count() + 1;
 
         applicationChannel.createThreadChannel(threadName, true)
                 .setAutoArchiveDuration(ThreadChannel.AutoArchiveDuration.TIME_1_WEEK)
@@ -152,7 +153,19 @@ public class ApplicationButton extends ListenerAdapter {
         Member member = event.getMember();
         Guild guild = event.getGuild();
 
-        assert guild != null;
+        if (guild == null) {
+            event.reply("Interaction must happen in server.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
+        if (member == null) {
+            event.reply("Could not find member.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
 
         String username = Objects.requireNonNull(event.getValue(usernameKey)).getAsString();
         String age = Objects.requireNonNull(event.getValue(ageKey)).getAsStringList().toString();
@@ -171,50 +184,27 @@ public class ApplicationButton extends ListenerAdapter {
 
         thread.sendMessageEmbeds(embed.build()).queue();
 
-        thread.sendMessage(Objects.requireNonNull(guild.getRoleById(Constants.STAFF_ROLE_ID)).getAsMention()).queue();
+        ArrayList<ThreadChannel> previousApplications = Application.getPreviousApplications(guild, member, username);
+
+        if (!previousApplications.isEmpty()) {
+            thread.sendMessage("Previous applications: " +
+                    previousApplications
+                            .stream()
+                            .map(ThreadChannel::getAsMention)
+                            .collect(Collectors.joining(", ")) + ".")
+                    .queue();
+        }
+
+        thread.sendMessage(Objects.requireNonNull(guild.getRoleById(Constants.STAFF_ROLE_ID))
+                .getAsMention())
+                .queue();
 
         thread.addThreadMember(member).queue();
 
-        try (PreparedStatement ps = Database.getConnection().prepareStatement("""
-                INSERT INTO applications (
-                    thread_id,
-                    user_id,
-                    username,
-                    age,
-                    metagaming,
-                    persona,
-                    prompt,
-                    status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """)) {
-            ps.setString(1, thread.getId());
-            ps.setString(2, member.getId());
-            ps.setString(3, username);
-            ps.setString(4, age);
-            ps.setString(5, metagaming);
-            ps.setString(6, character); // persona
-            ps.setString(7, prompt);
-            ps.setString(8, "OPEN");
-
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        Application.create(thread, member, username, age, metagaming, character, prompt);
 
         event.getHook()
                 .editOriginal("Your application has been created: " + thread.getAsMention())
                 .queue();
-    }
-
-    private int getNextApplicationNumber() {
-        try (PreparedStatement ps = Database.getConnection().prepareStatement("""
-            SELECT COUNT(*) FROM applications
-        """)) {
-            ResultSet rs = ps.executeQuery();
-            return rs.next() ? rs.getInt(1) + 1 : 1;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return 1;
-        }
     }
 }

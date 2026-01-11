@@ -14,17 +14,22 @@ import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.modals.Modal;
 import net.loretale.discordbot.Constants;
-import net.loretale.discordbot.Database;
+import net.loretale.discordbot.model.Ticket;
 
 import java.awt.*;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.Objects;
 
 public class TicketButton extends ListenerAdapter {
     @Override
     public void onButtonInteraction(ButtonInteractionEvent event) {
+        if (event.getGuild() == null) {
+            event.reply("Command must be used in server.")
+                    .setEphemeral(true)
+                    .queue();
+
+            return;
+        }
+
         String id = event.getComponentId();
 
         if (!id.startsWith("ticket:create:")) return;
@@ -50,6 +55,14 @@ public class TicketButton extends ListenerAdapter {
 
     @Override
     public void onModalInteraction(ModalInteractionEvent event) {
+        if (event.getGuild() == null) {
+            event.reply("Command must be used in server.")
+                    .setEphemeral(true)
+                    .queue();
+
+            return;
+        }
+
         String id = event.getModalId();
         if (!id.startsWith("ticket:modal:")) return;
 
@@ -69,7 +82,7 @@ public class TicketButton extends ListenerAdapter {
 
         event.deferReply(true).queue();
 
-        String threadName = type + "-ticket-" + member.getEffectiveName() + "-" + getNextTicketNumber();
+        String threadName = type + "-ticket-" + member.getEffectiveName() + "-" + Ticket.getCount() + 1;
 
         ticketChannel.createThreadChannel(threadName, true)
                 .setAutoArchiveDuration(ThreadChannel.AutoArchiveDuration.TIME_1_WEEK)
@@ -83,7 +96,13 @@ public class TicketButton extends ListenerAdapter {
         Member member = event.getMember();
         Guild guild = event.getGuild();
 
-        assert guild != null;
+        if (guild == null) {
+            event.reply("Command must be used in server.")
+                    .setEphemeral(true)
+                    .queue();
+
+            return;
+        }
 
         Role role = switch (type) {
             case "admin" -> guild.getRoleById(Constants.ADMIN_ROLE_ID);
@@ -112,43 +131,13 @@ public class TicketButton extends ListenerAdapter {
 
         thread.sendMessage(mention).queue();
 
-        thread.addThreadMember(member);
+        thread.addThreadMember(member).queue();
 
-        try (PreparedStatement ps = Database.getConnection().prepareStatement("""
-            INSERT INTO tickets (
-                thread_id,
-                user_id,
-                subject,
-                description,
-                status,
-                close_reason
-            ) VALUES (?, ?, ?, ?, ?, NULL)
-        """)) {
-            ps.setString(1, thread.getId());
-            ps.setString(2, member.getId());
-            ps.setString(3, reason);
-            ps.setString(4, description);
-            ps.setString(5, "OPEN");
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        Ticket.create(thread, member, reason, description);
 
         event.getHook()
                 .editOriginal("Your ticket has been created: " + thread.getAsMention())
                 .queue();
 
-    }
-
-    private int getNextTicketNumber() {
-        try (PreparedStatement ps = Database.getConnection().prepareStatement("""
-        SELECT COUNT(*) FROM tickets
-    """)) {
-            ResultSet rs = ps.executeQuery();
-            return rs.next() ? rs.getInt(1) + 1 : 1;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return 1;
-        }
     }
 }
