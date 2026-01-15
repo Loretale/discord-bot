@@ -15,4 +15,4 @@ DISCORD_TOKEN=YOURTESTINGTOKENHERE
 ```
 
 The database used is PostgreSQL. For more information on the development setup, please consult
-https://github.com/Loretale/discord-bot.
+https://github.com/Loretale/dev-setup.
