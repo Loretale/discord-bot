@@ -4,6 +4,8 @@ import java.sql.*;
 import java.util.List;
 
 public class MigrationManager {
+    private static final String APP_NAME = "discordbot";
+
     private static final List<Migration> MIGRATIONS = List.of(
             new V1_PersistentMessages(),
             new V2_Tickets(),
@@ -13,10 +15,13 @@ public class MigrationManager {
     public static void migrate(Connection connection) throws SQLException {
         try (Statement s = connection.createStatement()) {
             s.execute("""
-                    CREATE TABLE IF NOT EXISTS schema_version (
-                        version INTEGER PRIMARY KEY
-                    )
-                    """);
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    app_name TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (app_name, version)
+                );
+            """);
         }
 
         int currentVersion = getCurrentVersion(connection);
@@ -40,8 +45,14 @@ public class MigrationManager {
     }
 
     private static int getCurrentVersion(Connection connection) throws SQLException {
-        try (Statement s = connection.createStatement()) {
-            ResultSet rs = s.executeQuery("SELECT MAX(version) FROM schema_version");
+        try (PreparedStatement s = connection.prepareStatement("""
+                SELECT COALESCE(MAX(version), 0)
+                FROM schema_migrations
+                WHERE app_name = ?
+            """)) {
+            s.setString(1, APP_NAME);
+
+            ResultSet rs = s.executeQuery();
             rs.next();
             return rs.getInt(1);
         }
@@ -49,9 +60,11 @@ public class MigrationManager {
 
     private static void setVersion(Connection connection, int version) throws SQLException {
         try (PreparedStatement s = connection.prepareStatement("""
-                INSERT INTO schema_version (version) VALUES (?)
+                INSERT INTO schema_version (app_name, version) 
+                VALUES (?, ?)
                 """)) {
-            s.setInt(1, version);
+            s.setString(1, APP_NAME);
+            s.setInt(2, version);
             s.executeUpdate();
         }
     }
