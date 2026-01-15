@@ -65,7 +65,7 @@ public class Application {
                 "SELECT 1 FROM applications WHERE (user_id = ? OR username = ?) AND status = 'ACCEPTED' LIMIT 1"
         )) {
             ps.setString(1, member.getId());
-            ps.setString(1, username);
+            ps.setString(2, username);
             return ps.executeQuery().next();
         } catch (SQLException e) {
             e.printStackTrace();
