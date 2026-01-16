@@ -160,7 +160,10 @@ public class ApplicationStatusCommand extends ListenerAdapter {
         guild.retrieveMemberById(userId).queue(member -> {
                     guild.modifyNickname(member, username).queue();
                     Role role = guild.getRoleById(Constants.ACCEPTED_ROLE_ID);
-                    guild.addRoleToMember(member, role).queue();
+                    guild.addRoleToMember(member, role).queue(
+                            __ -> {},
+                            Throwable::printStackTrace
+                    );
                 }
         );
 
