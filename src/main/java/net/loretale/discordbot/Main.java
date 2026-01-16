@@ -12,6 +12,7 @@ import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
+import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.loretale.discordbot.buttons.ApplicationButton;
 import net.loretale.discordbot.buttons.TicketButton;
 import net.loretale.discordbot.commands.*;
@@ -20,6 +21,7 @@ import net.loretale.discordbot.listeners.ReactionListener;
 import net.loretale.discordbot.util.Logger;
 
 import java.awt.*;
+import java.util.Arrays;
 import java.util.Objects;
 
 public class Main {
@@ -29,6 +31,7 @@ public class Main {
         Database.init();
 
         JDA jda = JDABuilder.createDefault(token)
+                .enableIntents(Arrays.asList(GatewayIntent.values()))
                 .addEventListeners(new PingCommand())
                 .addEventListeners(new CreateMessageCommand())
                 .addEventListeners(new EditMessageCommand())
