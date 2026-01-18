@@ -135,7 +135,7 @@ public class Application {
                 "SELECT thread_id FROM applications WHERE (user_id = ? OR username = ?)"
         )) {
             ps.setString(1, member.getId());
-            ps.setString(1, username);
+            ps.setString(2, username);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 threadChannels.add(guild.getThreadChannelById(rs.getString("thread_id")));
