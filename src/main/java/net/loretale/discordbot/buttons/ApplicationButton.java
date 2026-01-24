@@ -140,7 +140,7 @@ public class ApplicationButton extends ListenerAdapter {
 
         event.deferReply(true).queue();
 
-        String threadName = username + "-" + Application.count() + 1;
+        String threadName = username + "-" + (Application.count() + 1);
 
         applicationChannel.createThreadChannel(threadName, true)
                 .setAutoArchiveDuration(ThreadChannel.AutoArchiveDuration.TIME_1_WEEK)

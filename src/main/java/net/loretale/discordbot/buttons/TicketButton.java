@@ -82,7 +82,7 @@ public class TicketButton extends ListenerAdapter {
 
         event.deferReply(true).queue();
 
-        String threadName = type + "-ticket-" + member.getEffectiveName() + "-" + Ticket.getCount() + 1;
+        String threadName = type + "-ticket-" + member.getEffectiveName() + "-" + (Ticket.getCount() + 1);
 
         ticketChannel.createThreadChannel(threadName, true)
                 .setAutoArchiveDuration(ThreadChannel.AutoArchiveDuration.TIME_1_WEEK)
