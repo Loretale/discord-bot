@@ -9,7 +9,8 @@ public class MigrationManager {
     private static final List<Migration> MIGRATIONS = List.of(
             new V1_PersistentMessages(),
             new V2_Tickets(),
-            new V3_Applications()
+            new V3_Applications(),
+            new V4_ApplicationWhitelisted()
     );
 
     public static void migrate(Connection connection) throws SQLException {
@@ -60,7 +61,7 @@ public class MigrationManager {
 
     private static void setVersion(Connection connection, int version) throws SQLException {
         try (PreparedStatement s = connection.prepareStatement("""
-                INSERT INTO schema_version (app_name, version) 
+                INSERT INTO schema_migrations (app_name, version)
                 VALUES (?, ?)
                 """)) {
             s.setString(1, APP_NAME);
