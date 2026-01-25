@@ -155,7 +155,8 @@ public class ApplicationStatusCommand extends ListenerAdapter {
         }
 
         notifyApplicant(guild, userId, "Your application " + thread.getAsMention() + " has been " +
-                "ACCEPTED, welcome to the server! When the server opens, you will be whitelisted and be able to join.");
+                "ACCEPTED, welcome to the server! When the server opens, you will be whitelisted on four first join. " +
+                "If your username changes in the meantime, please create a ticket!");
 
         guild.retrieveMemberById(userId).queue(member -> {
                     guild.modifyNickname(member, username).queue();
