@@ -44,9 +44,13 @@ public class Database {
         MigrationManager.migrate(connection);
     }
 
-    public static Connection getConnection() {
-        if (connection == null) {
-            throw new IllegalStateException("Database not initialized");
+    public static Connection getConnection() throws SQLException {
+        if (connection == null || connection.isClosed() || !connection.isValid(5)) {
+            connection = DriverManager.getConnection(
+                    getJdbcUrl(),
+                    getDbUser(),
+                    getDbPassword()
+            );
         }
         return connection;
     }
